@@ -3,7 +3,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 N = 1000
-beta = 0.7
+beta = 0.3
 gamma = 1/7
 t0 = 0
 t1 = 120
@@ -12,4 +12,24 @@ tspan = (t0, t1)
 tt = np.arange(t0, t1 + h, h)
 y0 = np.array([N - 5, 5, 0])
 
-def SIRmodel_ODE():
+def SIRmodel_ODE(t, y, n, b, g):
+    S, I, R = y[0], y[1], y[2]
+
+    sus = -beta * (I/N) * S
+
+    inf = beta * (I/N) * S - (gamma * I)
+
+    rec = gamma * I
+
+    return np.array([sus, inf, rec])
+
+sol = solve_ivp(SIRmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma))
+
+plt.plot(sol.t, sol.y[0], label="Mottaglig")
+plt.plot(sol.t, sol.y[1], label="Infektion")
+plt.plot(sol.t, sol.y[2], label="Återhämtning")
+plt.title('SIR-modell')
+plt.xlabel('t')
+plt.ylabel('y')
+plt.legend()
+plt.show()
