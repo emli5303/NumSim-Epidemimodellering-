@@ -47,12 +47,13 @@ def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
 
 
 def stochMatrix_SEIR():  
-    sMat = np.array([[-1, 1, 0, 0, 0, 0, 0, 0], 
+    sMat = np.array([[-1, 1, 0, 0, 0, 0, 0, 0],
+                     [0, 1, 0, 0, 0, -1, 0, 0],
+                     [0, 1, 0, 0, 0, 0, -1, 0], 
                      [0, -1, 1, 0, 0, 0, 0, 0], 
                      [0, 0, -1, 1, 0, 0, 0, 0], 
                      [0, 0, -1, 0, 1, 0, 0, 0], 
                      [-1, 0, 0, 0, 0, 1, 0, 0],
-                     [-1, 0, 0, 0, 0, 0, 1, 0],
                      [0, 0, 0, 0, 0, -1, 1, 0],
                      [0, 0, 0, 0, 0, 0, -1, 1]])
     return sMat
@@ -64,28 +65,34 @@ def SEIR_prop(y, coeff):
     # Beräkning av stokastisk konstant
     stoch_constant = beta/N
 
-    # Propensitet 1: Total intensitet för infektion (S --> E)
+    # Propensitet 1: S --> E
     a1 = stoch_constant * S * I
+
+    # Propensitet 2: V1 --> E
+    a2 = stoch_constant * V1 * theta1
+
+    # Propensitet 3: V2 --> E
+    a3 = stoch_constant * V2 * theta2
+
+    # Propensitet 4: E --> I
+    a4 = alpha * E
     
-    # Propensitet 2: Total intensitet för inkubation (E --> I)
-    a2 = alpha * E
-    
-    # Propensitet 3: Total intesitet för återhämtning (I --> R)
-    a3 = gamma * I
+    # Propensitet 5: I --> R
+    a5 = gamma * I
 
-    # Propensitet 4: Total intensitet för dödlighet (I --> D)
-    a4 = my * I
+    # Propensitet 6: I --> D
+    a6 = my * I
 
-    # Propensitet 5: Total intensitet för dos 1
-    a5 = ny
+    # Propensitet 7: S --> V1
+    a7 = ny * (S/N)
 
-    #Propensitet 6: Total intensitet för dos 2
-    a6 = vacc1_intervall * V1
+    #Propensitet 8: V1 --> V2
+    a8 = vacc1_intervall * V1
 
-    #Propensitet 7: Total intensitet för immunitet 
-    a7 = vacc2_intervall * V2
+    #Propensitet 9: V2 --> VI 
+    a9 = vacc2_intervall * V2
 
-    return np.array([a1, a2, a3, a4, a5, a6, a7])
+    return np.array([a1, a2, a3, a4, a5, a6, a7, a8, a9])
 
 
 def SSA(prop, stoch, X0, tspan, coeff):
