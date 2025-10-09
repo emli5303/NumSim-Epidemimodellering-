@@ -2,36 +2,43 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
 
-N = 1000
-beta = 0.3
-gamma = 1/7
-alpha = 1/5
+N = 1000 # Total population
+beta = 0.3 # Infektionshastighet
+gamma = 1/7 # Återhämtningshastighet
+alpha = 1/5 # Inkubationshastighet
 coeff = np.array([N, beta, gamma, alpha])
 t0 = 0
 t1 = 120
 h = 0.1
 tspan = (t0, t1)
-y0 = np.array([N - 5, 0, 5, 0])
+y0 = np.array([N - 5, 0, 5, 0]) # S, E, I, R
 tt = np.arange(t0, t1 + h, h)
 
 def SEIRmodel_ODE(t, y, n, b, g, a):
     S, E, I, R = y[0], y[1], y[2], y[3]
 
+    # S (Mottagliga) minskar p.g.a infektion
     sus = -b * (I/n) * S
-
+    
+    # E (Inkubation) ökar p.g.a alla infektioner och minskar p.g.a utveckling till I
+    exp = b * (I/n) * S - (a * E)
+    
+    # I (Infektion) ökar p.g.a inkubation och minskar p.g.a återhämtning
     inf = (a * E) - (g * I)
     
-    exp = b * (I/n) * S - (a * E)
-
+    # R (Återhämtning) ökar p.g.a återhämtning från I
     rec = g * I
 
     return np.array([sus, exp, inf, rec])
 
 
 def stochMatrix_SEIR():  
-    sMat = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
+    sMat = np.array([[-1, 1, 0, 0], # S --> E
+                     [0, -1, 1, 0], # E --> I
+                     [0, 0, -1, 1]]) # I --> R
     return sMat
 
+# Propensitetsfunktion - ger oss sannolikheten att ett fall sker
 def SEIR_prop(y, coeff):
     S, E, I, R = y[0], y[1], y[2], y[3]
     N, beta, gamma, alpha = coeff[0], coeff[1], coeff[2], coeff[3]
@@ -50,7 +57,7 @@ def SEIR_prop(y, coeff):
 
     return np.array([a1, a2, a3])
 
-
+# Gillespie algoritm:
 def SSA(prop, stoch, X0, tspan, coeff):
     # prop  - propensities
     # stoch - stiochiometry vector
@@ -92,19 +99,18 @@ def SSA(prop, stoch, X0, tspan, coeff):
             
     return tvec, Xarr
 
+# Kör stokastiska modellen med Gillespie algoritmen:
 t, X = SSA(SEIR_prop, stochMatrix_SEIR, y0, tspan, coeff)
+# Kör determiska modellen med solve_ivp:
 sol = solve_ivp(SEIRmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha))
 
 
-# plottar båda lösningarna för att jämföra resultaten
+# Plottar båda lösningarna för att jämföra resultaten
 plt.figure(1)
 plt.plot(t,X[:,0],'b-',label="Mottaglig")
 plt.plot(t,X[:,1],'r-', label="Inkubation")
 plt.plot(t,X[:,2],'g-', label="Infektion")
 plt.plot(t,X[:,3],'y-', label="Återhämtning")
-#ax1 = plt.gca()
-#xmin, xmax, ymin, ymax = ax1.axis()
-# ax1.set(xlim=(0,xmax), ylim=(0, ymax))
 plt.title("SEIR-modell, stokastisk")
 plt.legend()
 
@@ -113,10 +119,7 @@ plt.plot(sol.t,sol.y[0],"b-", label="Mottaglig")
 plt.plot(sol.t,sol.y[1],"r-", label="Inkubation")
 plt.plot(sol.t,sol.y[2],"g-", label="Infektion")
 plt.plot(sol.t,sol.y[3],"y-", label="Återhämtning")
-#ax2 = plt.gca()
-# xmin, xmax, ymin, ymax = ax2.axis()
-#ax2.set(xlim=(0, xmax), ylim=(0, ymax))
 plt.legend()
-plt.title("SIR-modell, deterministisk")
+plt.title("SEIR-modell, deterministisk")
 plt.show()
 

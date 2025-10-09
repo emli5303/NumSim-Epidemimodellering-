@@ -2,62 +2,73 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
 
-N = 1000
-beta = 0.3
-gamma = 1/7
-alpha = 1/5
-my = 0.005
-ny = 3
-theta1 = 0.107 # vacc1, 1 - 0.893 = 0.107
-theta2 = 0.05 #vacc2, 1 - 0.95 = 0.05
+N = 1000 # Total population
+beta = 0.3 # Infektionshastighet
+gamma = 1/7 # Återhämtningshastighet
+alpha = 1/5 # Inkubationshastighet
+my = 0.005 # Dödlighetshastighet
+ny = 3 # Vaccinationshastighet 
+theta1 = 0.107 # Minskning av infektionsrisk efter vacc1, 1 - 0.893 = 0.107
+theta2 = 0.05 # Minskning av infektionsrisk efter vacc2, 1 - 0.95 = 0.05
 delta = 1 #vaccImmune
-vacc1_intervall = 1/49
-vacc2_intervall = 1/14
+vacc1_intervall = 1/49 # Hastighet för V1 --> V2
+vacc2_intervall = 1/14 # Hastighet för V2 --> VI
 coeff = np.array([N, beta, gamma, alpha, my, ny, theta1, theta2, delta])
 t0 = 0
 t1 = 120
 h = 0.1
 tspan = (t0, t1)
-y0 = np.array([N - 5, 0, 5, 0, 0, 0, 0, 0])
+y0 = np.array([N - 5, 0, 5, 0, 0, 0, 0, 0]) # S, E, I, R, D, V1, V2, VI
 tt = np.arange(t0, t1 + h, h)
 
 def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
     S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
-
+    
+    # Beräknar infektionstermer
+    expS = b * (I/n) * S * d  # S-->E
+    expV1 = b * (I/n) * V1 * t1 # V1-->E (genombrottsinfektion)
+    expV2 = b * (I/n) * V2 * t2 # V2-->E (genombrottsinfektion)
+    
+    # S (Mottagliga) minskar p.g.a infektion och vaccination
     sus = -b * (I/n) * S - ny
-
-    expS = b * (I/n) * S * d
-    expV1 = b * (I/n) * V1 * t1
-    expV2 = b * (I/n) * V2 * t2
+    
+    # E (Inkubation) ökar p.g.a alla infektioner och minskar p.g.a utveckling till I
     exp = expS + expV1 + expV2 - (a * E)
-    
+
+    # I (Infektion) ökar p.g.a inkubation och minskar p.g.a återhämtning och död
     inf = (a * E) - (g * I) - (m * I)
-    
+
+    # R (Återhämtning) ökar p.g.a återhämtning från I
     rec = g * I
-    
+
+    # D (Dödlighet) ökar p.g.a dödlighet från I
     dea = m * I
-    
+
+    # V1 (Dos 1) ökar p.g.a vaccination och minskar p.g.a infektion och dos 2
     v_dos1 = ny - expV1 - (vacc1_intervall * V1)
 
+    # V2 (Dos 2) ökar p.g.a V1 och minskar p.g.a infektion och immunitet
     v_dos2 = (vacc1_intervall * V1) - (vacc2_intervall * V2) - expV2
-
+    
+    # VI ökar p.g.a immunitet från dos 2
     v_imm = (vacc2_intervall * V2)
 
     return np.array([sus, exp, inf, rec, dea, v_dos1, v_dos2, v_imm])
 
-
+# Beskriver hur varje tillstånd förändras vid varje reaktion
 def stochMatrix_SEIR():  
-    sMat = np.array([[-1, 1, 0, 0, 0, 0, 0, 0],
-                     [0, 1, 0, 0, 0, -1, 0, 0],
-                     [0, 1, 0, 0, 0, 0, -1, 0], 
-                     [0, -1, 1, 0, 0, 0, 0, 0], 
-                     [0, 0, -1, 1, 0, 0, 0, 0], 
-                     [0, 0, -1, 0, 1, 0, 0, 0], 
-                     [-1, 0, 0, 0, 0, 1, 0, 0],
-                     [0, 0, 0, 0, 0, -1, 1, 0],
-                     [0, 0, 0, 0, 0, 0, -1, 1]])
+    sMat = np.array([[-1, 1, 0, 0, 0, 0, 0, 0], # S --> E
+                     [0, 1, 0, 0, 0, -1, 0, 0], # V1 --> E
+                     [0, 1, 0, 0, 0, 0, -1, 0], # V2 --> E
+                     [0, -1, 1, 0, 0, 0, 0, 0], # E --> I
+                     [0, 0, -1, 1, 0, 0, 0, 0], # I --> R
+                     [0, 0, -1, 0, 1, 0, 0, 0], # I --> D
+                     [-1, 0, 0, 0, 0, 1, 0, 0], # S --> V1
+                     [0, 0, 0, 0, 0, -1, 1, 0], # V1 --> V2
+                     [0, 0, 0, 0, 0, 0, -1, 1]]) # V2 --> VI 
     return sMat
 
+# Propensitetsfunktion - ger oss sannolikheten att ett fall sker
 def SEIR_prop(y, coeff):
     S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
     N, beta, gamma, alpha, my, ny, theta1, theta2, delta = coeff[0], coeff[1], coeff[2], coeff[3], coeff[4], coeff[5], coeff[6], coeff[7], coeff[8]
@@ -68,33 +79,33 @@ def SEIR_prop(y, coeff):
     # Propensitet 1: S --> E
     a1 = stoch_constant * S * I
 
-    # Propensitet 2: V1 --> E
+    # Propensitet 2: V1 --> E (genombrottsinfektion)
     a2 = stoch_constant * V1 * theta1
 
-    # Propensitet 3: V2 --> E
+    # Propensitet 3: V2 --> E (genombrottsinfektion)
     a3 = stoch_constant * V2 * theta2
 
-    # Propensitet 4: E --> I
+    # Propensitet 4: E --> I (Inkubation)
     a4 = alpha * E
     
-    # Propensitet 5: I --> R
+    # Propensitet 5: I --> R (Återhämtning)
     a5 = gamma * I
 
-    # Propensitet 6: I --> D
+    # Propensitet 6: I --> D (Dödlighet)
     a6 = my * I
 
-    # Propensitet 7: S --> V1
+    # Propensitet 7: S --> V1 (Vaccination dos 1)
     a7 = ny * (S/N)
 
-    #Propensitet 8: V1 --> V2
+    #Propensitet 8: V1 --> V2 (Vaccination dos 1)
     a8 = vacc1_intervall * V1
 
-    #Propensitet 9: V2 --> VI 
+    #Propensitet 9: V2 --> VI (Immunitet)
     a9 = vacc2_intervall * V2
 
     return np.array([a1, a2, a3, a4, a5, a6, a7, a8, a9])
 
-
+# Gillespie algoritm:
 def SSA(prop, stoch, X0, tspan, coeff):
     # prop  - propensities
     # stoch - stiochiometry vector
@@ -136,11 +147,12 @@ def SSA(prop, stoch, X0, tspan, coeff):
             
     return tvec, Xarr
 
+# Kör stokastiska modellen med Gillespie algoritmen:
 t, X = SSA(SEIR_prop, stochMatrix_SEIR, y0, tspan, coeff)
+# Kör determiska modellen med solve_ivp:
 sol = solve_ivp(SEIRmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha, my, ny, theta1, theta2, delta))
 
-
-# plottar båda lösningarna för att jämföra resultaten
+# Plottar båda lösningarna för att jämföra resultaten
 plt.figure(1)
 plt.plot(t,X[:,0],'b-',label="Mottaglig")
 plt.plot(t,X[:,1],'r-', label="Inkubation")
