@@ -1,0 +1,160 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.integrate import solve_ivp
+
+N = 1000
+beta = 0.3
+gamma = 1/7
+alpha = 1/5
+my = 0.005
+ny = 3
+theta1 = 0.107 # vacc1, 1 - 0.893 = 0.107
+theta2 = 0.05 #vacc2, 1 - 0.95 = 0.05
+delta = 1 #vaccImmune
+vacc1_intervall = 1/49
+vacc2_intervall = 1/14
+coeff = np.array([N, beta, gamma, alpha, my, ny, theta1, theta2, delta])
+t0 = 0
+t1 = 120
+h = 0.1
+tspan = (t0, t1)
+y0 = np.array([N - 5, 0, 5, 0, 0, 0, 0, 0])
+tt = np.arange(t0, t1 + h, h)
+
+def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
+    S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
+
+    sus = -b * (I/n) * S - ny
+
+    expS = b * (I/n) * S * d
+    expV1 = b * (I/n) * V1 * t1
+    expV2 = b * (I/n) * V2 * t2
+    exp = expS + expV1 + expV2 - (a * E)
+    
+    inf = (a * E) - (g * I) - (m * I)
+    
+    rec = g * I
+    
+    dea = m * I
+    
+    v_dos1 = ny - expV1 - (vacc1_intervall * V1)
+
+    v_dos2 = (vacc1_intervall * V1) - (vacc2_intervall * V2) - expV2
+
+    v_imm = (vacc2_intervall * V2)
+
+    return np.array([sus, exp, inf, rec, dea, v_dos1, v_dos2, v_imm])
+
+
+def stochMatrix_SEIR():  
+    sMat = np.array([[-1, 1, 0, 0, 0, 0, 0, 0], 
+                     [0, -1, 1, 0, 0, 0, 0, 0], 
+                     [0, 0, -1, 1, 0, 0, 0, 0], 
+                     [0, 0, -1, 0, 1, 0, 0, 0], 
+                     [-1, 0, 0, 0, 0, 1, 0, 0],
+                     [-1, 0, 0, 0, 0, 0, 1, 0],
+                     [0, 0, 0, 0, 0, -1, 1, 0],
+                     [0, 0, 0, 0, 0, 0, -1, 1]])
+    return sMat
+
+def SEIR_prop(y, coeff):
+    S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
+    N, beta, gamma, alpha, my, ny, theta1, theta2, delta = coeff[0], coeff[1], coeff[2], coeff[3], coeff[4], coeff[5], coeff[6], coeff[7], coeff[8]
+
+    # Beräkning av stokastisk konstant
+    stoch_constant = beta/N
+
+    # Propensitet 1: Total intensitet för infektion (S --> E)
+    a1 = stoch_constant * S * I
+    
+    # Propensitet 2: Total intensitet för inkubation (E --> I)
+    a2 = alpha * E
+    
+    # Propensitet 3: Total intesitet för återhämtning (I --> R)
+    a3 = gamma * I
+
+    # Propensitet 4: Total intensitet för dödlighet (I --> D)
+    a4 = my * I
+
+    # Propensitet 5: Total intensitet för dos 1
+    a5 = ny
+
+    #Propensitet 6: Total intensitet för dos 2
+    a6 = vacc1_intervall * V1
+
+    #Propensitet 7: Total intensitet för immunitet 
+    a7 = vacc2_intervall * V2
+
+    return np.array([a1, a2, a3, a4, a5, a6, a7])
+
+
+def SSA(prop, stoch, X0, tspan, coeff):
+    # prop  - propensities
+    # stoch - stiochiometry vector
+    # Initial state vector
+    tvec = np.zeros(1)
+    tvec[0] = tspan[0]
+    Xarr = np.zeros([1,len(X0)])
+    Xarr[0,:] = X0
+    t = tvec[0]
+    X = X0
+    sMat = stoch()
+    while t<tspan[1]:
+        r1, r2 = np.random.uniform(0, 1, size=2)  # Find two random numbers on uniform distr.
+        re = prop(X,coeff)
+        cre = np.cumsum(re)
+        a0 = cre[-1]
+        if a0 < 1e-12:
+            break
+
+        tau = np.random.exponential(scale=1/a0) # Random number exponential distribution
+        cre = cre/a0
+        r = 0
+        while cre[r] < r2:
+            r += 1
+        
+        t += tau
+        # if new time is larger than final time, skip last calculation
+        if t > tspan[1]:
+            break
+        
+        tvec = np.append(tvec,t)
+        X = X + sMat[r,:]
+        Xarr = np.vstack([Xarr,X])
+
+     # If iterations stopped before final time, add final time and no change
+    if tvec[-1] < tspan[1]:
+        tvec=np.append(tvec,tspan[1])
+        Xarr=np.vstack([Xarr,X])          
+            
+    return tvec, Xarr
+
+t, X = SSA(SEIR_prop, stochMatrix_SEIR, y0, tspan, coeff)
+sol = solve_ivp(SEIRmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha, my, ny, theta1, theta2, delta))
+
+
+# plottar båda lösningarna för att jämföra resultaten
+plt.figure(1)
+plt.plot(t,X[:,0],'b-',label="Mottaglig")
+plt.plot(t,X[:,1],'r-', label="Inkubation")
+plt.plot(t,X[:,2],'g-', label="Infektion")
+plt.plot(t,X[:,3],'y-', label="Återhämtning")
+plt.plot(t,X[:,4],'k-', label="Dödlighet")
+plt.plot(t,X[:,5],'c-', label="Vaccinerade dos 1")
+plt.plot(t,X[:,6],'tab:pink', label="Vaccinerade dos 2")
+plt.plot(t,X[:,7],'tab:purple', label="Immun")
+plt.title("Egen modell, stokastisk")
+plt.legend()
+
+plt.figure(2)
+plt.plot(sol.t,sol.y[0],"b-", label="Mottaglig")
+plt.plot(sol.t,sol.y[1],"r-", label="Inkubation")
+plt.plot(sol.t,sol.y[2],"g-", label="Infektion")
+plt.plot(sol.t,sol.y[3],"y-", label="Återhämtning")
+plt.plot(sol.t,sol.y[4],"k-", label="Dödlighet")
+plt.plot(sol.t,sol.y[5],"c-", label="Vaccinerade dos 1")
+plt.plot(sol.t,sol.y[6],"tab:pink", label="Vaccinerade dos 2")
+plt.plot(sol.t,sol.y[7],"tab:purple", label="Immun")
+plt.legend()
+plt.title("Egen modell, deterministisk")
+plt.show()

@@ -6,41 +6,44 @@ N = 1000
 beta = 0.3
 gamma = 1/7
 alpha = 1/5
-coeff = np.array([N, beta, gamma, alpha])
+my = 0.005
+coeff = np.array([N, beta, gamma, alpha, my])
 t0 = 0
 t1 = 120
 h = 0.1
 tspan = (t0, t1)
-y0 = np.array([N - 5, 0, 5, 0])
+y0 = np.array([N - 5, 0, 5, 0, 0])
 tt = np.arange(t0, t1 + h, h)
 
-def SEIRmodel_ODE(t, y, n, b, g, a):
-    S, E, I, R = y[0], y[1], y[2], y[3]
+def SEIRmodel_ODE(t, y, n, b, g, a, m):
+    S, E, I, R, D = y[0], y[1], y[2], y[3], y[4]
 
     sus = -b * (I/n) * S
 
-    inf = (a * E) - (g * I)
-    
     exp = b * (I/n) * S - (a * E)
-
+    
+    inf = (a * E) - (g * I) - (m * I)
+    
     rec = g * I
+    
+    dea = m * I
 
-    return np.array([sus, exp, inf, rec])
+    return np.array([sus, exp, inf, rec, dea])
 
 
 def stochMatrix_SEIR():  
-    sMat = np.array([[-1, 1, 0, 0], [0, -1, 1, 0], [0, 0, -1, 1]])
+    sMat = np.array([[-1, 1, 0, 0, 0], [0, -1, 1, 0, 0], [0, 0, -1, 1, 0], [0, 0, -1, 0, 1]])
     return sMat
 
 def SEIR_prop(y, coeff):
-    S, E, I, R = y[0], y[1], y[2], y[3]
-    N, beta, gamma, alpha = coeff[0], coeff[1], coeff[2], coeff[3]
+    S, E, I, R, D = y[0], y[1], y[2], y[3], y[4]
+    N, beta, gamma, alpha, my = coeff[0], coeff[1], coeff[2], coeff[3], coeff[4]
 
     # Beräkning av stokastisk konstant
     stoch_constant = beta/N
 
     # Propensitet 1: Total intensitet för infektion (S --> E)
-    a1 = stoch_constant * S * I
+    a1 = stoch_constant * S * I 
     
     # Propensitet 2: Total intensitet för inkubation (E --> I)
     a2 = alpha * E
@@ -48,7 +51,10 @@ def SEIR_prop(y, coeff):
     # Propensitet 3: Total intesitet för återhämtning (I --> R)
     a3 = gamma * I
 
-    return np.array([a1, a2, a3])
+    # Propensitet 4: Total intensitet för dödlighet (I --> D)
+    a4 = my * I
+
+    return np.array([a1, a2, a3, a4])
 
 
 def SSA(prop, stoch, X0, tspan, coeff):
@@ -93,7 +99,7 @@ def SSA(prop, stoch, X0, tspan, coeff):
     return tvec, Xarr
 
 t, X = SSA(SEIR_prop, stochMatrix_SEIR, y0, tspan, coeff)
-sol = solve_ivp(SEIRmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha))
+sol = solve_ivp(SEIRmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha, my))
 
 
 # plottar båda lösningarna för att jämföra resultaten
@@ -102,10 +108,11 @@ plt.plot(t,X[:,0],'b-',label="Mottaglig")
 plt.plot(t,X[:,1],'r-', label="Inkubation")
 plt.plot(t,X[:,2],'g-', label="Infektion")
 plt.plot(t,X[:,3],'y-', label="Återhämtning")
+plt.plot(t,X[:,4],'k-', label="Dödlighet")
 #ax1 = plt.gca()
 #xmin, xmax, ymin, ymax = ax1.axis()
 # ax1.set(xlim=(0,xmax), ylim=(0, ymax))
-plt.title("SEIR-modell, stokastisk")
+plt.title("SEIRD-modell, stokastisk")
 plt.legend()
 
 plt.figure(2)
@@ -113,10 +120,10 @@ plt.plot(sol.t,sol.y[0],"b-", label="Mottaglig")
 plt.plot(sol.t,sol.y[1],"r-", label="Inkubation")
 plt.plot(sol.t,sol.y[2],"g-", label="Infektion")
 plt.plot(sol.t,sol.y[3],"y-", label="Återhämtning")
+plt.plot(sol.t,sol.y[4],"k-", label="Dödlighet")
 #ax2 = plt.gca()
 # xmin, xmax, ymin, ymax = ax2.axis()
 #ax2.set(xlim=(0, xmax), ylim=(0, ymax))
 plt.legend()
-plt.title("SIR-modell, deterministisk")
+plt.title("SEIRD-modell, deterministisk")
 plt.show()
-
