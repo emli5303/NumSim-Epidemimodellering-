@@ -13,6 +13,8 @@ theta2 = 0.05 # Minskning av infektionsrisk efter vacc2, 1 - 0.95 = 0.05
 delta = 1 #vaccImmune
 vacc1_intervall = 1/49 # Hastighet för V1 --> V2
 vacc2_intervall = 1/14 # Hastighet för V2 --> VI
+immdose1 = 1/14
+immdose2 = 1/7
 coeff = np.array([N, beta, gamma, alpha, my, ny, theta1, theta2, delta])
 t0 = 0
 t1 = 120
@@ -24,14 +26,14 @@ tt = np.arange(t0, t1 + h, h)
 def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
     S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
     
+    # S (Mottagliga) minskar p.g.a infektion och vaccination
+    sus = -b * (I/n) * S - ny
+    
     # Beräknar infektionstermer
     expS = b * (I/n) * S * d  # S-->E
     expV1 = b * (I/n) * V1 * t1 # V1-->E (genombrottsinfektion)
     expV2 = b * (I/n) * V2 * t2 # V2-->E (genombrottsinfektion)
-    
-    # S (Mottagliga) minskar p.g.a infektion och vaccination
-    sus = -b * (I/n) * S - ny
-    
+
     # E (Inkubation) ökar p.g.a alla infektioner och minskar p.g.a utveckling till I
     exp = expS + expV1 + expV2 - (a * E)
 
@@ -45,13 +47,13 @@ def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
     dea = m * I
 
     # V1 (Dos 1) ökar p.g.a vaccination och minskar p.g.a infektion och dos 2
-    v_dos1 = ny - expV1 - (vacc1_intervall * V1)
+    v_dos1 = ny - expV1 - (vacc1_intervall * V1) - immdose1 * V1
 
     # V2 (Dos 2) ökar p.g.a V1 och minskar p.g.a infektion och immunitet
-    v_dos2 = (vacc1_intervall * V1) - (vacc2_intervall * V2) - expV2
+    v_dos2 = (vacc1_intervall * V1) - (immdose2 * V2) - expV2
     
     # VI ökar p.g.a immunitet från dos 2
-    v_imm = (vacc2_intervall * V2)
+    v_imm = immdose1 * V1 + immdose2 * V2
 
     return np.array([sus, exp, inf, rec, dea, v_dos1, v_dos2, v_imm])
 
@@ -64,6 +66,7 @@ def stochMatrix_SEIR():
                      [0, 0, -1, 1, 0, 0, 0, 0], # I --> R
                      [0, 0, -1, 0, 1, 0, 0, 0], # I --> D
                      [-1, 0, 0, 0, 0, 1, 0, 0], # S --> V1
+                     [0, 0, 0, 0, 0, -1, 0, 1], # V1 --> VI
                      [0, 0, 0, 0, 0, -1, 1, 0], # V1 --> V2
                      [0, 0, 0, 0, 0, 0, -1, 1]]) # V2 --> VI 
     return sMat
@@ -80,10 +83,10 @@ def SEIR_prop(y, coeff):
     a1 = stoch_constant * S * I
 
     # Propensitet 2: V1 --> E (genombrottsinfektion)
-    a2 = stoch_constant * V1 * theta1
+    a2 = stoch_constant * V1 * I * theta1
 
     # Propensitet 3: V2 --> E (genombrottsinfektion)
-    a3 = stoch_constant * V2 * theta2
+    a3 = stoch_constant * V2 * I * theta2
 
     # Propensitet 4: E --> I (Inkubation)
     a4 = alpha * E
@@ -95,15 +98,18 @@ def SEIR_prop(y, coeff):
     a6 = my * I
 
     # Propensitet 7: S --> V1 (Vaccination dos 1)
-    a7 = ny * (S/N)
+    a7 = ny
 
     #Propensitet 8: V1 --> V2 (Vaccination dos 1)
     a8 = vacc1_intervall * V1
 
-    #Propensitet 9: V2 --> VI (Immunitet)
-    a9 = vacc2_intervall * V2
+    # Propensitet 9: V1 --> VI (Immunitet)
+    a9 = immdose1 * V1
 
-    return np.array([a1, a2, a3, a4, a5, a6, a7, a8, a9])
+    #Propensitet 9: V2 --> VI (Immunitet)
+    a10 =  immdose2 * V2
+
+    return np.array([a1, a2, a3, a4, a5, a6, a7, a8, a9, a10])
 
 # Gillespie algoritm:
 def SSA(prop, stoch, X0, tspan, coeff):
