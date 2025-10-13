@@ -13,8 +13,8 @@ theta2 = 0.05 # Minskning av infektionsrisk efter vacc2, 1 - 0.95 = 0.05
 delta = 1 #vaccImmune
 vacc1_intervall = 1/49 # Hastighet för V1 --> V2
 vacc2_intervall = 1/14 # Hastighet för V2 --> VI
-immdose1 = 1/14
-immdose2 = 1/7
+immdose1 = 1/14 # Sannolikhet för att bli immun efter dos 1 
+immdose2 = 1/7 # Sannolikhet för att bli immun efter dos 2
 coeff = np.array([N, beta, gamma, alpha, my, ny, theta1, theta2, delta])
 t0 = 0
 t1 = 120
@@ -27,7 +27,7 @@ def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
     S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
     
     # S (Mottagliga) minskar p.g.a infektion och vaccination
-    sus = -b * (I/n) * S - ny
+    sus = -b * (I/n) * S - min(ny, S)
     
     # Beräknar infektionstermer
     expS = b * (I/n) * S * d  # S-->E
@@ -98,7 +98,7 @@ def SEIR_prop(y, coeff):
     a6 = my * I
 
     # Propensitet 7: S --> V1 (Vaccination dos 1)
-    a7 = ny
+    a7 = min(ny, S)
 
     #Propensitet 8: V1 --> V2 (Vaccination dos 1)
     a8 = vacc1_intervall * V1

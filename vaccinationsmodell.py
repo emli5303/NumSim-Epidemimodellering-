@@ -7,7 +7,7 @@ beta = 0.3
 gamma = 1/7
 alpha = 1/5
 my = 0.005
-ny = 5
+ny = 7
 coeff = np.array([N, beta, gamma, alpha, my, ny])
 t0 = 0
 t1 = 120
@@ -19,7 +19,7 @@ tt = np.arange(t0, t1 + h, h)
 def SEIRmodel_ODE(t, y, n, b, g, a, m, ny):
     S, E, I, R, D, V = y[0], y[1], y[2], y[3], y[4], y[5]
 
-    sus = -b * (I/n) * S - ny
+    sus = -b * (I/n) * S - min(ny, S)
 
     exp = b * (I/n) * S - (a * E)
     
@@ -57,7 +57,7 @@ def SEIR_prop(y, coeff):
     # Propensitet 4: Total intensitet för dödlighet (I --> D)
     a4 = my * I
 
-    a5 = ny
+    a5 = min(ny, S)
 
     return np.array([a1, a2, a3, a4, a5])
 
