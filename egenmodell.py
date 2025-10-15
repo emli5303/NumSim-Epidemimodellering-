@@ -23,7 +23,7 @@ tspan = (t0, t1)
 y0 = np.array([N - 5, 0, 5, 0, 0, 0, 0, 0]) # S, E, I, R, D, V1, V2, VI
 tt = np.arange(t0, t1 + h, h)
 
-def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
+def ownmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
     S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
     
     # S (Mottagliga) minskar p.g.a infektion och vaccination
@@ -58,7 +58,7 @@ def SEIRmodel_ODE(t, y, n, b, g, a, m, ny, t1, t2, d):
     return np.array([sus, exp, inf, rec, dea, v_dos1, v_dos2, v_imm])
 
 # Beskriver hur varje tillstånd förändras vid varje reaktion
-def stochMatrix_SEIR():  
+def stochMatrix_ownmodel():  
     sMat = np.array([[-1, 1, 0, 0, 0, 0, 0, 0], # S --> E
                      [0, 1, 0, 0, 0, -1, 0, 0], # V1 --> E
                      [0, 1, 0, 0, 0, 0, -1, 0], # V2 --> E
@@ -72,7 +72,7 @@ def stochMatrix_SEIR():
     return sMat
 
 # Propensitetsfunktion - ger oss sannolikheten att ett fall sker
-def SEIR_prop(y, coeff):
+def ownmodel_prop(y, coeff):
     S, E, I, R, D, V1, V2, VI = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]
     N, beta, gamma, alpha, my, ny, theta1, theta2, delta = coeff[0], coeff[1], coeff[2], coeff[3], coeff[4], coeff[5], coeff[6], coeff[7], coeff[8]
 
@@ -154,9 +154,9 @@ def SSA(prop, stoch, X0, tspan, coeff):
     return tvec, Xarr
 
 # Kör stokastiska modellen med Gillespie algoritmen:
-t, X = SSA(SEIR_prop, stochMatrix_SEIR, y0, tspan, coeff)
+t, X = SSA(ownmodel_prop, stochMatrix_ownmodel, y0, tspan, coeff)
 # Kör determiska modellen med solve_ivp:
-sol = solve_ivp(SEIRmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha, my, ny, theta1, theta2, delta))
+sol = solve_ivp(ownmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha, my, ny, theta1, theta2, delta))
 
 # Plottar båda lösningarna för att jämföra resultaten
 plt.figure(1)

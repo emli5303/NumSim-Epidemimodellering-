@@ -2,51 +2,57 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
 
-N = 1000
-beta = 0.3
-gamma = 1/7
-alpha = 1/5
-my = 0.005
-ny = 7
-coeff = np.array([N, beta, gamma, alpha, my, ny])
+N = 1000 # Total population
+beta = 0.3 # Infektionshastighet
+gamma = 1/7 # Återhämtningshastighet
+alpha = 1/5 # Inkubationshastighet
+my = 0.01 # Dödlighetshastighet
+coeff = np.array([N, beta, gamma, alpha, my])
 t0 = 0
 t1 = 120
 h = 0.1
 tspan = (t0, t1)
-y0 = np.array([N - 5, 0, 5, 0, 0, 0])
+y0 = np.array([N - 5, 0, 5, 0, 0]) # S, E, I, R, D
 tt = np.arange(t0, t1 + h, h)
 
-def vaccinationmodel_ODE(t, y, n, b, g, a, m, ny):
-    S, E, I, R, D, V = y[0], y[1], y[2], y[3], y[4], y[5]
+def SEIRDmodel_ODE(t, y, n, b, g, a, m):
+    S, E, I, R, D = y[0], y[1], y[2], y[3], y[4]
 
-    sus = -b * (I/n) * S - min(ny, S)
+    # S (Mottagliga) minskar p.g.a infektion
+    sus = -b * (I/n) * S
 
+    # E (Inkubation) ökar p.g.a alla infektioner och minskar p.g.a utveckling till I
     exp = b * (I/n) * S - (a * E)
     
+    # I (Infektion) ökar p.g.a inkubation och minskar p.g.a återhämtning och död
     inf = (a * E) - (g * I) - (m * I)
     
+    # R (Återhämtning) ökar p.g.a återhämtning från I
     rec = g * I
     
+    # D (Dödlighet) ökar p.g.a dödlighet från I
     dea = m * I
 
-    vacc = ny
-
-    return np.array([sus, exp, inf, rec, dea, vacc])
+    return np.array([sus, exp, inf, rec, dea])
 
 
-def stochMatrix_vaccination():  
-    sMat = np.array([[-1, 1, 0, 0, 0, 0], [0, -1, 1, 0, 0, 0], [0, 0, -1, 1, 0, 0], [0, 0, -1, 0, 1, 0], [-1, 0, 0, 0, 0, 1]])
+def stochMatrix_SEIRD():  
+    sMat = np.array([[-1, 1, 0, 0, 0], # S --> E
+                     [0, -1, 1, 0, 0], # E --> I
+                     [0, 0, -1, 1, 0], # I --> R
+                     [0, 0, -1, 0, 1]]) # I --> D
     return sMat
 
-def vaccination_prop(y, coeff):
-    S, E, I, R, D, V = y[0], y[1], y[2], y[3], y[4], y[5]
-    N, beta, gamma, alpha, my, ny = coeff[0], coeff[1], coeff[2], coeff[3], coeff[4], coeff[5]
+# Propensitetsfunktion - ger oss sannolikheten att ett fall sker
+def SEIRD_prop(y, coeff):
+    S, E, I, R, D = y[0], y[1], y[2], y[3], y[4]
+    N, beta, gamma, alpha, my = coeff[0], coeff[1], coeff[2], coeff[3], coeff[4]
 
     # Beräkning av stokastisk konstant
     stoch_constant = beta/N
 
     # Propensitet 1: Total intensitet för infektion (S --> E)
-    a1 = stoch_constant * S * I
+    a1 = stoch_constant * S * I 
     
     # Propensitet 2: Total intensitet för inkubation (E --> I)
     a2 = alpha * E
@@ -57,11 +63,9 @@ def vaccination_prop(y, coeff):
     # Propensitet 4: Total intensitet för dödlighet (I --> D)
     a4 = my * I
 
-    a5 = min(ny, S)
+    return np.array([a1, a2, a3, a4])
 
-    return np.array([a1, a2, a3, a4, a5])
-
-
+# Gillespie algoritm:
 def SSA(prop, stoch, X0, tspan, coeff):
     # prop  - propensities
     # stoch - stiochiometry vector
@@ -103,19 +107,20 @@ def SSA(prop, stoch, X0, tspan, coeff):
             
     return tvec, Xarr
 
-t, X = SSA(vaccination_prop, stochMatrix_vaccination, y0, tspan, coeff)
-sol = solve_ivp(vaccinationmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha, my, ny))
+# Kör stokastiska modellen med Gillespie algoritmen:
+t, X = SSA(SEIRD_prop, stochMatrix_SEIRD, y0, tspan, coeff)
+# Kör determiska modellen med solve_ivp:
+sol = solve_ivp(SEIRDmodel_ODE, tspan, y0, t_eval=tt, args=(N, beta, gamma, alpha, my))
 
 
-# plottar båda lösningarna för att jämföra resultaten
+# Plottar båda lösningarna för att jämföra resultaten
 plt.figure(1)
 plt.plot(t,X[:,0],'b-',label="Mottaglig")
 plt.plot(t,X[:,1],'r-', label="Inkubation")
 plt.plot(t,X[:,2],'g-', label="Infektion")
 plt.plot(t,X[:,3],'y-', label="Återhämtning")
 plt.plot(t,X[:,4],'k-', label="Dödlighet")
-plt.plot(t,X[:,5],'m-', label="Vaccinerade")
-plt.title("Vaccinationsmodell, stokastisk")
+plt.title("SEIRD-modell, stokastisk")
 plt.legend()
 
 plt.figure(2)
@@ -124,7 +129,6 @@ plt.plot(sol.t,sol.y[1],"r-", label="Inkubation")
 plt.plot(sol.t,sol.y[2],"g-", label="Infektion")
 plt.plot(sol.t,sol.y[3],"y-", label="Återhämtning")
 plt.plot(sol.t,sol.y[4],"k-", label="Dödlighet")
-plt.plot(sol.t,sol.y[5],"m-", label="Vaccinerade")
 plt.legend()
-plt.title("Vaccinationsmodell, deterministisk")
+plt.title("SEIRD-modell, deterministisk")
 plt.show()
